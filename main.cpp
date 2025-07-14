@@ -74,13 +74,67 @@ std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > find_contours(const c
 
 std::vector<cv::Point> centroids(const std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > &contours) {
     std::vector<cv::Point> centroids;
-    for (const auto &[fst, snd]: contours) {
-        centroids.emplace_back(fst.x + fst.width / 2, fst.y + fst.height / 2);
+    for (const auto &[boundingBox, contour]: contours) {
+        const cv::Moments m = cv::moments(contour);
+        int cx = static_cast<int>(m.m10 / m.m00);
+        int cy = static_cast<int>(m.m01 / m.m00);
+        centroids.emplace_back(cx, cy);
     }
     return centroids;
 }
 
-void draw_contours_with_centroids(const cv::Size size, const std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > &contours, std::vector<cv::Point> centroids ) {
+std::vector<std::vector<double> > get_bofs(const std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > &contours,
+                                           const std::vector<cv::Point> &centroids) {
+    std::vector<std::vector<double> > vectors;
+
+    for (size_t i = 0; i < contours.size(); ++i) {
+        const auto &contour = contours[i].second;
+        const auto &centroid = centroids[i];
+
+        std::vector<cv::Point> sorted = contour;
+        // std::sort(sorted.begin(), sorted.end(), [&](const cv::Point &a, const cv::Point &b) {
+        //     const double angle_a = std::atan2(a.y - centroid.y, a.x - centroid.x);
+        //     const double angle_b = std::atan2(b.y - centroid.y, b.x - centroid.x);
+        //     return angle_a < angle_b;
+        // });
+
+        // must resize here
+
+
+        std::vector<double> bof;
+        bof.reserve(sorted.size());
+        for (const auto &pt: sorted) {
+            const double dist = cv::norm(centroid - pt);
+            bof.push_back(dist);
+        }
+
+        vectors.emplace_back(std::move(bof));
+    }
+
+    return vectors;
+}
+
+std::vector<std::vector<double>> resize_normalize_bofs(std::vector<std::vector<double> > &vectors,
+                                                       const int newSize = 180) {
+    std::vector<std::vector<double> > bofs;
+    for (auto &vector: vectors) {
+        const double max = *std::max_element(vector.begin(), vector.end());
+        for (auto &val: vector) {
+            val /= max;
+        }
+
+        cv::Mat bof(1, newSize, CV_32FC1);
+        auto vecMat = cv::Mat(vector);
+        cv::resize(vecMat, bof, cv::Size(newSize, 1), 0, 0, cv::INTER_NEAREST);
+        bofs.emplace_back(std::move(bof));
+    }
+    return bofs;
+}
+
+
+void draw_contours_with_centroids(const cv::Size size,
+                                  const std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > &contours,
+                                  const std::vector<cv::Point> &centroids) {
     cv::Mat contourImage = cv::Mat::zeros(size, CV_8UC3);
     cv::RNG rng(12345);
 
@@ -90,6 +144,9 @@ void draw_contours_with_centroids(const cv::Size size, const std::vector<std::pa
                          std::vector<std::vector<cv::Point> >{contours[i].second},
                          -1, color, 2);
 
+        if (i < centroids.size()) {
+            cv::circle(contourImage, centroids[i], 4, color, -1);
+        }
 
         const cv::Rect bbox = contours[i].first;
         const cv::Point textOrg(bbox.x, bbox.y + bbox.height + 15);
@@ -116,9 +173,11 @@ int main() {
 
     const auto binarized = preprocess_binary(image);
     const auto filtered = filter_largest_blobs(binarized);
-    auto sortedContours = find_contours(filtered);
-    auto sortedCentroids = centroids(sortedContours);
-    draw_contours_with_centroids(sortedContours[0].first.size(), sortedContours, sortedCentroids);
+    const auto sortedContours = find_contours(filtered);
+    const auto sortedCentroids = centroids(sortedContours);
+    auto bofs = get_bofs(sortedContours, sortedCentroids);
+    auto normal_bofs = resize_normalize_bofs(bofs);
+    draw_contours_with_centroids(image.size(), sortedContours, sortedCentroids);
     cv::waitKey(0);
 
     return 0;
