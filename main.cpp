@@ -1,7 +1,46 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <algorithm>
+#include <fstream>
 #include <iostream>
+
+class Figure {
+    std::vector<cv::Point> contour;
+    cv::Moments moments;
+    cv::Point<double> centroid;
+    int newSize = 180;
+
+    void find_bof() {
+        std::vector<cv::Point> sorted = contour;
+        std::sort(sorted.begin(), sorted.end(), [&](const cv::Point &a, const cv::Point &b) {
+            const double angle_a = std::atan2(a.y - centroid.y, a.x - centroid.x);
+            const double angle_b = std::atan2(b.y - centroid.y, b.x - centroid.x);
+            return angle_a < angle_b;
+        });
+
+        std::vector<double> bof;
+        bof.reserve(sorted.size());
+        for (const auto &pt: sorted) {
+            const double dist = cv::norm(centroid - pt);
+            bof.push_back(dist);
+        }
+
+        const double max = *std::max_element(bof.begin(), bof.end());
+        for (auto &val: bof) {
+            val /= max;
+        }
+
+        std::vector<double> n_bof;
+        cv::resize(bof, n_bof, cv::Size(newSize, 1), 0, 0, cv::INTER_CUBIC);
+    }
+
+public:
+    explicit Figure(const std::vector<cv::Point> &contour) : contour(contour) {
+        moments = cv::moments(contour);
+        centroid = cv::Point(moments.m10 / moments.m00, moments.m01 / moments.m00);
+        find_bof();
+    }
+};
 
 cv::Mat read_image_gray(const std::string &image_path) {
     cv::Mat image = cv::imread(image_path, cv::IMREAD_GRAYSCALE);
@@ -53,7 +92,7 @@ cv::Mat filter_largest_blobs(const cv::Mat &binary_image, const int max_blobs = 
 std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > find_contours(const cv::Mat &image) {
     std::vector<std::vector<cv::Point> > contours;
     std::vector<cv::Vec4i> hierarchy;
-    cv::findContours(image, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    cv::findContours(image, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
 
     std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > sortedContours;
     for (const auto &contour: contours) {
@@ -92,14 +131,11 @@ std::vector<std::vector<double> > get_bofs(const std::vector<std::pair<cv::Rect,
         const auto &centroid = centroids[i];
 
         std::vector<cv::Point> sorted = contour;
-        // std::sort(sorted.begin(), sorted.end(), [&](const cv::Point &a, const cv::Point &b) {
-        //     const double angle_a = std::atan2(a.y - centroid.y, a.x - centroid.x);
-        //     const double angle_b = std::atan2(b.y - centroid.y, b.x - centroid.x);
-        //     return angle_a < angle_b;
-        // });
-
-        // must resize here
-
+        std::sort(sorted.begin(), sorted.end(), [&](const cv::Point &a, const cv::Point &b) {
+            const double angle_a = std::atan2(a.y - centroid.y, a.x - centroid.x);
+            const double angle_b = std::atan2(b.y - centroid.y, b.x - centroid.x);
+            return angle_a < angle_b;
+        });
 
         std::vector<double> bof;
         bof.reserve(sorted.size());
@@ -114,8 +150,8 @@ std::vector<std::vector<double> > get_bofs(const std::vector<std::pair<cv::Rect,
     return vectors;
 }
 
-std::vector<std::vector<double>> resize_normalize_bofs(std::vector<std::vector<double> > &vectors,
-                                                       const int newSize = 180) {
+std::vector<std::vector<double> > resize_normalize_bofs(std::vector<std::vector<double> > &vectors,
+                                                        const int newSize = 180) {
     std::vector<std::vector<double> > bofs;
     for (auto &vector: vectors) {
         const double max = *std::max_element(vector.begin(), vector.end());
@@ -123,12 +159,26 @@ std::vector<std::vector<double>> resize_normalize_bofs(std::vector<std::vector<d
             val /= max;
         }
 
-        cv::Mat bof(1, newSize, CV_32FC1);
-        auto vecMat = cv::Mat(vector);
-        cv::resize(vecMat, bof, cv::Size(newSize, 1), 0, 0, cv::INTER_NEAREST);
+        std::cout << vector.size() << std::endl;
+        std::vector<double> bof;
+        cv::resize(vector, bof, cv::Size(newSize, 1), 0, 0, cv::INTER_CUBIC);
         bofs.emplace_back(std::move(bof));
     }
     return bofs;
+}
+
+
+void save_as_csv(const std::vector<std::vector<double> > &vectors,
+                 const std::string &filename = "/home/fausto/CLionProjects/figuras/results.csv") {
+    auto file = std::ofstream(filename);
+    for (const auto &vector: vectors) {
+        for (const auto &val: vector) {
+            file << val << ",";
+        }
+
+        file << std::endl;
+    }
+    file.close();
 }
 
 
@@ -177,6 +227,7 @@ int main() {
     const auto sortedCentroids = centroids(sortedContours);
     auto bofs = get_bofs(sortedContours, sortedCentroids);
     auto normal_bofs = resize_normalize_bofs(bofs);
+    save_as_csv(normal_bofs);
     draw_contours_with_centroids(image.size(), sortedContours, sortedCentroids);
     cv::waitKey(0);
 
