@@ -2,7 +2,7 @@
 // Created by fausto on 7/18/25.
 //
 
-#include "Figure.h"
+#include "../include/Figure.h"
 
 #include <opencv2/imgproc.hpp>
 
@@ -15,9 +15,13 @@ const cv::Point &Figure::get_centroid() const {
     return centroid;
 }
 
+const std::vector<cv::Point> & Figure::get_contour() const {
+    return contour;
+}
+
+
 bool Figure::operator<(const Figure &other) const {
-    constexpr int row_tolerance = 10;
-    if (std::abs(centroid.y - other.centroid.y) > row_tolerance) {
+    if (constexpr int row_tolerance = 10; std::abs(centroid.y - other.centroid.y) > row_tolerance) {
         return centroid.y < other.centroid.y;
     }
     return centroid.x < other.centroid.x;

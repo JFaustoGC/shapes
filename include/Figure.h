@@ -17,6 +17,7 @@ public:
     explicit Figure(const std::vector<cv::Point>& contour);
 
     const cv::Point& get_centroid() const;
+    const std::vector<cv::Point>& get_contour() const;
     std::vector<double> find_bof() const;
 
     bool operator<(const Figure& other) const;

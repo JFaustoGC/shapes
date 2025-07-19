@@ -4,80 +4,69 @@
 #include <fstream>
 #include <iostream>
 
+#include "include/Figure.h"
 
-cv::Mat read_image_gray(const std::string &image_path) {
-    cv::Mat image = cv::imread(image_path, cv::IMREAD_GRAYSCALE);
-    if (image.empty()) {
-        std::cerr << "Could not load image!" << std::endl;
-        return {};
-    }
-    return image;
-}
-
-cv::Mat preprocess_binary(const cv::Mat &image, const int threshold_value = 250, const int filter_size = 3,
-                          const int iterations = 2) {
-    cv::Mat binarized;
-    cv::threshold(image, binarized, threshold_value, 255, cv::THRESH_BINARY_INV);
-
-    const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(filter_size, filter_size));
-    cv::morphologyEx(binarized, binarized, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
-
-    return binarized;
-}
-
-cv::Mat filter_largest_blobs(const cv::Mat &binary_image, const int max_blobs = 24) {
-    cv::Mat labels, stats, centroids;
-    const int numLabels = cv::connectedComponentsWithStats(binary_image, labels, stats, centroids);
-
-    std::vector<std::pair<int, int> > blobs;
-    for (int i = 1; i < numLabels; ++i) {
-        // skip background
-        int area = stats.at<int>(i, cv::CC_STAT_AREA);
-        blobs.emplace_back(i, area);
+namespace FigureFinder {
+    namespace Constants {
+        constexpr int THRESHOLD_VALUE = 250;
+        constexpr int FILTER_SIZE = 3;
+        constexpr int ITERATIONS = 2;
     }
 
-    std::sort(blobs.begin(), blobs.end(),
-              [](const auto &a, const auto &b) {
-                  return a.second > b.second;
-              });
-
-    cv::Mat filtered = cv::Mat::zeros(binary_image.size(), CV_8UC1);
-    const int keepCount = std::min(max_blobs, static_cast<int>(blobs.size()));
-    for (int i = 0; i < keepCount; ++i) {
-        const int label = blobs[i].first;
-        filtered.setTo(255, labels == label);
+    static cv::Mat convert_to_grayscale(const cv::Mat &input) {
+        if (input.channels() > 1) {
+            cv::Mat gray;
+            cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
+            return gray;
+        }
+        return input.clone();
     }
 
-    return filtered;
-}
-
-
-std::vector<Figure> find_figures(const cv::Mat &image) {
-    std::vector<std::vector<cv::Point> > contours;
-    std::vector<cv::Vec4i> hierarchy;
-    std::vector<Figure> figures;
-    cv::findContours(image, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
-
-    std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > sortedContours;
-    for (const auto &contour: contours) {
-        cv::Rect bbox = cv::boundingRect(contour);
-        sortedContours.emplace_back(bbox, contour);
+    static cv::Mat apply_threshold(const cv::Mat &gray_image) {
+        cv::Mat binary;
+        cv::threshold(gray_image, binary, Constants::THRESHOLD_VALUE, 255, cv::THRESH_BINARY_INV);
+        return binary;
     }
 
-    std::sort(sortedContours.begin(), sortedContours.end(),
-              [](const auto &a, const auto &b) {
-                  constexpr int row_tolerance = 10;
-                  if (std::abs(a.first.y - b.first.y) > row_tolerance)
-                      return a.first.y < b.first.y;
-                  return a.first.x < b.first.x;
-              });
-
-    for (const auto &contour: contours) {
-        figures.emplace_back(contour);
+    static cv::Mat apply_morphology(const cv::Mat &binary_image) {
+        const cv::Mat kernel = cv::getStructuringElement(
+            cv::MORPH_RECT,
+            cv::Size(Constants::FILTER_SIZE, Constants::FILTER_SIZE)
+        );
+        cv::Mat morphed;
+        cv::morphologyEx(binary_image, morphed, cv::MORPH_OPEN, kernel,
+                         cv::Point(-1, -1), Constants::ITERATIONS);
+        return morphed;
     }
 
-    return figures;
-}
+    static std::vector<std::vector<cv::Point> > find_sorted_contours(const cv::Mat &image) {
+        std::vector<std::vector<cv::Point> > contours;
+        std::vector<cv::Vec4i> hierarchy;
+        cv::findContours(image, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
+        std::sort(contours.begin(), contours.end(),
+                  [](const auto &a, const auto &b) {
+                      return a.size() > b.size();
+                  });
+
+        return contours;
+    }
+
+
+    static std::vector<Figure> find_figures(const cv::Mat &ref_image, const int quantity) {
+        const auto gray_image = convert_to_grayscale(ref_image);
+        const auto binary_image = apply_threshold(gray_image);
+        const auto morphed_image = apply_morphology(binary_image);
+        auto contours = find_sorted_contours(morphed_image);
+        std::vector<Figure> figures;
+        figures.reserve(quantity);
+        const int keepCount = std::min(quantity, static_cast<int>(contours.size()));
+        for (int i = 0; i < keepCount; ++i) {
+            figures.emplace_back(contours[i]);
+        }
+
+        return figures;
+    }
+};
 
 
 void save_as_csv(const std::vector<Figure> &figures,
@@ -102,27 +91,26 @@ void save_as_csv(const std::vector<Figure> &figures,
 }
 
 
-void draw_contours_with_centroids(const cv::Size size,
-                                  const std::vector<std::pair<cv::Rect, std::vector<cv::Point> > > &contours,
-                                  const std::vector<cv::Point> &centroids) {
-    cv::Mat contourImage = cv::Mat::zeros(size, CV_8UC3);
+void draw_figures(const cv::Size &size, const std::vector<Figure> &figures) {
+    cv::Mat display = cv::Mat::zeros(size, CV_8UC3);
     cv::RNG rng(12345);
 
-    for (size_t i = 0; i < contours.size(); ++i) {
+    for (size_t i = 0; i < figures.size(); ++i) {
+        // Generate random color for each figure
         auto color = cv::Scalar(rng.uniform(100, 255), rng.uniform(100, 255), rng.uniform(100, 255));
-        cv::drawContours(contourImage,
-                         std::vector<std::vector<cv::Point> >{contours[i].second},
-                         -1, color, 2);
 
-        if (i < centroids.size()) {
-            cv::circle(contourImage, centroids[i], 4, color, -1);
-        }
+        // Draw contour
+        cv::drawContours(display, std::vector<std::vector<cv::Point> >{figures[i].get_contour()}, -1, color, 2);
 
-        const cv::Rect bbox = contours[i].first;
-        const cv::Point textOrg(bbox.x, bbox.y + bbox.height + 15);
+        // Draw centroid
+        cv::circle(display, figures[i].get_centroid(), 4, color, -1);
 
+        // Calculate text position (below the figure)
+        cv::Rect bbox = cv::boundingRect(figures[i].get_contour());
+        cv::Point textOrg(bbox.x, bbox.y + bbox.height + 15);
 
-        cv::putText(contourImage,
+        // Draw figure number
+        cv::putText(display,
                     std::to_string(i + 1),
                     textOrg,
                     cv::FONT_HERSHEY_SIMPLEX,
@@ -131,8 +119,7 @@ void draw_contours_with_centroids(const cv::Size size,
                     2);
     }
 
-
-    cv::imshow("Sorted Contours", contourImage);
+    cv::imshow("Figures", display);
 }
 
 int main() {
@@ -141,14 +128,12 @@ int main() {
 
     if (image.empty()) return 1;
 
-    const auto binarized = preprocess_binary(image);
-    const auto filtered = filter_largest_blobs(binarized);
-    const auto figures = find_figures(filtered);
+    const auto figures = FigureFinder::find_figures(image, 24);
 
 
     save_as_csv(figures);
-    // draw_contours_with_centroids(image.size(), figures, sortedCentroids);
-    // cv::waitKey(0);
+    draw_figures(image.size(), figures);
+    cv::waitKey(0);
 
     return 0;
 }
