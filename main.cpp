@@ -1,94 +1,11 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
-#include <algorithm>
 #include <fstream>
-#include <iostream>
 
 #include "include/Figure.h"
-
-namespace FigureFinder {
-    namespace Constants {
-        constexpr int THRESHOLD_VALUE = 250;
-        constexpr int FILTER_SIZE = 3;
-        constexpr int ITERATIONS = 2;
-    }
-
-    static cv::Mat convert_to_grayscale(const cv::Mat &input) {
-        if (input.channels() > 1) {
-            cv::Mat gray;
-            cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
-            return gray;
-        }
-        return input.clone();
-    }
-
-    static cv::Mat apply_threshold(const cv::Mat &gray_image) {
-        cv::Mat binary;
-        cv::threshold(gray_image, binary, Constants::THRESHOLD_VALUE, 255, cv::THRESH_BINARY_INV);
-        return binary;
-    }
-
-    static cv::Mat apply_morphology(const cv::Mat &binary_image) {
-        const cv::Mat kernel = cv::getStructuringElement(
-            cv::MORPH_RECT,
-            cv::Size(Constants::FILTER_SIZE, Constants::FILTER_SIZE)
-        );
-        cv::Mat morphed;
-        cv::morphologyEx(binary_image, morphed, cv::MORPH_OPEN, kernel,
-                         cv::Point(-1, -1), Constants::ITERATIONS);
-        return morphed;
-    }
-
-    static std::vector<std::vector<cv::Point> > find_sorted_contours(const cv::Mat &image) {
-        std::vector<std::vector<cv::Point> > contours;
-        std::vector<cv::Vec4i> hierarchy;
-        cv::findContours(image, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
-        std::sort(contours.begin(), contours.end(),
-                  [](const auto &a, const auto &b) {
-                      return a.size() > b.size();
-                  });
-
-        return contours;
-    }
-
-
-    static std::vector<Figure> find_figures(const cv::Mat &ref_image, const int quantity) {
-        const auto gray_image = convert_to_grayscale(ref_image);
-        const auto binary_image = apply_threshold(gray_image);
-        const auto morphed_image = apply_morphology(binary_image);
-        auto contours = find_sorted_contours(morphed_image);
-        std::vector<Figure> figures;
-        figures.reserve(quantity);
-        const int keepCount = std::min(quantity, static_cast<int>(contours.size()));
-        for (int i = 0; i < keepCount; ++i) {
-            figures.emplace_back(contours[i]);
-        }
-
-        return figures;
-    }
-};
-
-
-void save_as_csv(const std::vector<Figure> &figures,
-                 const std::string &filename = "/home/fausto/CLionProjects/figuras/results.csv") {
-    std::vector<std::vector<double> > vectors;
-
-    for (auto &figure: figures) {
-        auto bof = figure.find_bof();
-        vectors.emplace_back(std::move(bof));
-    }
-
-
-    auto file = std::ofstream(filename);
-    for (const auto &vector: vectors) {
-        for (const auto &val: vector) {
-            file << val << ",";
-        }
-
-        file << std::endl;
-    }
-    file.close();
-}
+#include "include/FigureProvider.h"
+#include "include/CsvFigureProvider.h"
+#include "include/ImageFigureProvider.h"
 
 
 void draw_figures(const cv::Size &size, const std::vector<Figure> &figures) {
@@ -123,16 +40,26 @@ void draw_figures(const cv::Size &size, const std::vector<Figure> &figures) {
 }
 
 int main() {
-    const std::string image_path = "../shapes.jpg";
-    const auto image = read_image_gray(image_path);
+    const std::string image_path = "../img/shapes.jpg";
+    const std::string csv_path = "../img/shapes.csv";
+    const std::string square = "../img/oval.png";
+
+    const auto image = cv::imread(image_path);
 
     if (image.empty()) return 1;
 
-    const auto figures = FigureFinder::find_figures(image, 24);
+    ImageFigureProvider provider;
+    const auto figures = provider.get_figures(image, 24);
+    const auto square_image = cv::imread(square);
+    const auto square_figures = provider.get_figures(square_image, 1);
+    //const auto figures = read_from_csv();
+
+    const auto match = square_figures[0].find_closest(figures);
+    std::cout << match.get_name() << std::endl;
 
 
-    save_as_csv(figures);
-    draw_figures(image.size(), figures);
+    //save_as_csv(figures);
+    draw_figures(image.size(),std::vector{match});
     cv::waitKey(0);
 
     return 0;

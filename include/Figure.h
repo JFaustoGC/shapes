@@ -11,16 +11,25 @@ class Figure {
     std::vector<cv::Point> contour;
     cv::Moments moments;
     cv::Point centroid;
+    std::string name;
     int newSize = 180;
 
 public:
-    explicit Figure(const std::vector<cv::Point>& contour);
+    explicit Figure(const std::vector<cv::Point> &contour, std::string name);
 
-    const cv::Point& get_centroid() const;
-    const std::vector<cv::Point>& get_contour() const;
+    explicit Figure(const std::vector<double> &bof, std::string name, cv::Point centroid);
+
+    const Figure& find_closest(const std::vector<Figure> &figures) const;
+
+    const cv::Point &get_centroid() const;
+
+    const std::vector<cv::Point> &get_contour() const;
+
+    const std::string &get_name() const;
+
     std::vector<double> find_bof() const;
 
-    bool operator<(const Figure& other) const;
+    bool operator<(const Figure &other) const;
 };
 
 
