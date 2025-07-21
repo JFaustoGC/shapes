@@ -41,25 +41,32 @@ void draw_figures(const cv::Size &size, const std::vector<Figure> &figures) {
 
 int main() {
     const std::string image_path = "../img/shapes.jpg";
-    const std::string csv_path = "../img/shapes.csv";
-    const std::string square = "../img/oval.png";
+    const std::string csv_path = "../results.csv";
+    const std::string test = "../img/triangle.png";
 
     const auto image = cv::imread(image_path);
 
     if (image.empty()) return 1;
 
-    ImageFigureProvider provider;
-    const auto figures = provider.get_figures(image, 24);
-    const auto square_image = cv::imread(square);
-    const auto square_figures = provider.get_figures(square_image, 1);
+    auto *main_provider = new ImageFigureProvider();
+    auto *csv_provider = new CsvFigureProvider(csv_path);
+
+    auto figures = main_provider->get_figures(image, 24);
+    csv_provider->save_figures(figures);
+
+
+    // ImageFigureProvider provider;
+    // csv_provider->save_figures(figures);
+    const auto test_image = cv::imread(test);
+    const auto test_figure = main_provider->get_figures(test_image, 1);
     //const auto figures = read_from_csv();
 
-    const auto match = square_figures[0].find_closest(figures);
+    const auto match = test_figure[0].find_closest(figures);
     std::cout << match.get_name() << std::endl;
 
 
     //save_as_csv(figures);
-    draw_figures(image.size(),std::vector{match});
+    draw_figures(image.size(), figures);
     cv::waitKey(0);
 
     return 0;

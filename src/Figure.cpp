@@ -19,6 +19,7 @@ Figure::Figure(const std::vector<cv::Point> &contour, std::string name) : contou
 
 Figure::Figure(const std::vector<double> &bof, std::string name, cv::Point centroid) {
     this->name = std::move(name);
+    this->bof = bof;
     const double max_dist = 100.0;
     std::vector<cv::Point> points;
     points.reserve(bof.size());
@@ -37,7 +38,7 @@ Figure::Figure(const std::vector<double> &bof, std::string name, cv::Point centr
     this->moments = cv::moments(contour);
 }
 
-const Figure& Figure::find_closest(const std::vector<Figure>& figures) const {
+const Figure &Figure::find_closest(const std::vector<Figure> &figures) const {
     if (figures.empty()) {
         throw std::invalid_argument("Cannot find closest in empty vector");
     }
@@ -45,19 +46,23 @@ const Figure& Figure::find_closest(const std::vector<Figure>& figures) const {
     const std::vector<double> this_bof = this->find_bof();
 
     double min_distance = std::numeric_limits<double>::max();
-    size_t closest_index = 0;
+    int closest_index = -1;
 
-    for (size_t i = 0; i < figures.size(); ++i) {
+    for (int i = 0; i < figures.size(); ++i) {
         const std::vector<double> other_bof = figures[i].find_bof();
         double current_distance = cv::norm(this_bof, other_bof, cv::NORM_L2);
 
-        std::cout << "Figure: " << figures[i].get_name()  // Adjust if you use another method or member
-                  << " | Distance: " << current_distance << '\n';
+        std::cout << "Figure: " << figures[i].get_name() // Adjust if you use another method or member
+                << " | Distance: " << current_distance << '\n';
 
         if (current_distance < min_distance) {
             min_distance = current_distance;
             closest_index = i;
         }
+    }
+
+    if (closest_index == 1) {
+        throw std::runtime_error("Could not find closest figure. Check the BOF values.");
     }
 
     return figures[closest_index];
@@ -84,18 +89,38 @@ bool Figure::operator<(const Figure &other) const {
     return centroid.x < other.centroid.x;
 }
 
+std::vector<cv::Point> densifyContour(const std::vector<cv::Point> &contour, double step = 1.0) {
+    std::vector<cv::Point> dense;
+
+    for (size_t i = 0; i < contour.size(); ++i) {
+        cv::Point p1 = contour[i];
+        cv::Point p2 = contour[(i + 1) % contour.size()]; // wrap around
+
+        double dist = cv::norm(p2 - p1);
+        int numPoints = std::max(1, static_cast<int>(dist / step));
+
+        for (int j = 0; j <= numPoints; ++j) {
+            double alpha = static_cast<double>(j) / numPoints;
+            int x = static_cast<int>(std::round((1 - alpha) * p1.x + alpha * p2.x));
+            int y = static_cast<int>(std::round((1 - alpha) * p1.y + alpha * p2.y));
+            dense.emplace_back(cv::Point(x, y));
+        }
+    }
+
+    return dense;
+}
+
 
 std::vector<double> Figure::find_bof() const {
-    std::vector<cv::Point> sorted = contour;
-    std::sort(sorted.begin(), sorted.end(), [&](const cv::Point &a, const cv::Point &b) {
-        const double angle_a = std::atan2(a.y - centroid.y, a.x - centroid.x);
-        const double angle_b = std::atan2(b.y - centroid.y, b.x - centroid.x);
-        return angle_a < angle_b;
-    });
+    if (!this->bof.empty()) {
+        return this->bof;
+    }
+
+
 
     std::vector<double> bof;
-    bof.reserve(sorted.size());
-    for (const auto &pt: sorted) {
+    bof.reserve(contour.size());
+    for (const auto &pt: contour) {
         const double dist = cv::norm(centroid - pt);
         bof.push_back(dist);
     }
@@ -106,6 +131,6 @@ std::vector<double> Figure::find_bof() const {
     }
 
     std::vector<double> n_bof;
-    cv::resize(bof, n_bof, cv::Size(newSize, 1), 0, 0, cv::INTER_CUBIC);
+    cv::resize(bof, n_bof, cv::Size(BOF_SIZE, 1), 0, 0, cv::INTER_CUBIC);
     return n_bof;
 }

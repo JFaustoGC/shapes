@@ -12,7 +12,9 @@ class Figure {
     cv::Moments moments;
     cv::Point centroid;
     std::string name;
-    int newSize = 180;
+    std::vector <double> bof;
+
+    static constexpr int BOF_SIZE = 180;
 
 public:
     explicit Figure(const std::vector<cv::Point> &contour, std::string name);

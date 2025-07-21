@@ -6,9 +6,16 @@
 
 #include <opencv2/imgproc.hpp>
 
+// const std::vector<std::string> ImageFigureProvider::names = {
+//     "circle", "ellipse", "oval", "square", "rectangle", "trapezium",
+//     "parallelogram", "rhombus", "kite", "triangle", "right triangle", "scalene triangle",
+//     "pentagon", "hexagon", "heptagon", "octagon", "nonagon", "decagon",
+//     "star", "heart", "crescent", "cross", "pie", "arrow"
+// };
+
 const std::vector<std::string> ImageFigureProvider::names = {
     "circle", "ellipse", "oval", "square", "rectangle", "trapezium",
-    "parallelogram", "rhombus", "kite", "triangle", "right triangle", "scalene triangle",
+    "rhombus", "kite", "triangle", "parallelogram", "right triangle", "scalene triangle",
     "pentagon", "hexagon", "heptagon", "octagon", "nonagon", "decagon",
     "star", "heart", "crescent", "cross", "pie", "arrow"
 };

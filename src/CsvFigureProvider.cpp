@@ -7,6 +7,14 @@
 #include <sstream>
 
 
+CsvFigureProvider::CsvFigureProvider(std::string filename) {
+    this->filename = filename;
+    if (!file_exists()) {
+        std::ofstream file(filename);
+        file.close();
+    }
+}
+
 std::vector<Figure> CsvFigureProvider::get_figures(const cv::Mat &ref_image, int quantity) {
     std::vector<Figure> figures;
     std::ifstream file(filename);
@@ -17,7 +25,6 @@ std::vector<Figure> CsvFigureProvider::get_figures(const cv::Mat &ref_image, int
     }
 
     while (std::getline(file, line)) {
-        constexpr int bof_size = 180;
         std::stringstream ss(line);
         std::string value;
         std::vector<double> bof;
