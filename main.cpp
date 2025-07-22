@@ -37,6 +37,7 @@ void draw_figures(const cv::Size &size, const std::vector<Figure> &figures) {
     }
 
     cv::imshow("Figures", display);
+    cv::imwrite("../docs/bofs_output.png", display);
 }
 
 int main() {
@@ -51,23 +52,22 @@ int main() {
     auto *main_provider = new ImageFigureProvider();
     auto *csv_provider = new CsvFigureProvider(csv_path);
 
-    auto figures = main_provider->get_figures(image, 24);
-    csv_provider->save_figures(figures);
+    auto figures = csv_provider->get_figures(image, 24);
+    //csv_provider->save_figures(figures);
 
 
-    // ImageFigureProvider provider;
-    // csv_provider->save_figures(figures);
+
     const auto test_image = cv::imread(test);
     const auto test_figure = main_provider->get_figures(test_image, 1);
-    //const auto figures = read_from_csv();
+
 
     const auto match = test_figure[0].find_closest(figures);
     std::cout << match.get_name() << std::endl;
-
-
-    //save_as_csv(figures);
-    draw_figures(image.size(), figures);
-    cv::waitKey(0);
+    //
+    //
+    // //save_as_csv(figures);
+    // draw_figures(image.size(), figures);
+    // cv::waitKey(0);
 
     return 0;
 }

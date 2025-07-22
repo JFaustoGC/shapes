@@ -4,6 +4,7 @@
 
 #include "../include/ImageFigureProvider.h"
 
+#include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
 // const std::vector<std::string> ImageFigureProvider::names = {
@@ -70,6 +71,7 @@ ImageFigureProvider::find_sorted_contours(const cv::Mat &image, const int quanti
                       return ra.y < rb.y;
                   return ra.x < rb.x;
               });
+
 
     return contours;
 }

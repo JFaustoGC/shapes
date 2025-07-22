@@ -1,3 +1,36 @@
+# Shapes Project
+
+This project uses CMake for building. Follow these steps to compile and run:
+
+### **Prerequisites**
+
+- CMake (>= 3.1)
+- A C++ compiler (GCC, Clang, or MSVC)
+- OpenCV
+
+### **Build Instructions**
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/JFaustoGC/shapes.git
+   cd shapes
+   ```
+2. **Create a build directory:**
+    ```bash
+    mkdir build && cd build
+    ```
+
+3. **Configure and build:**
+   ```bash
+   cmake ..
+   make
+   ```
+
+4. **Run the executable:**
+   ```bash
+   ./figuras
+   ```
+
 ## Core Classes Overview
 
 This document outlines the main classes of the figure processing system, which allows extracting, representing,
@@ -116,3 +149,62 @@ This class allows for easy integration with external tools or manual annotation 
 
 Together, these classes define a modular and extensible pipeline for figure extraction, representation, comparison, and
 storage based on radial distance descriptors from centroid to boundary.
+
+## Methodology
+
+The following steps illustrate the image processing pipeline implemented in `ImageFigureProvider`. This sequence
+transforms the original image into a set of recognizable shapes:
+
+1. **Grayscale Conversion**  
+   The input image is first converted to grayscale to simplify the data and reduce computational complexity.  
+   ![Grayscale](docs/gray_output.png)
+
+2. **Thresholding**  
+   A binary threshold is applied to distinguish foreground shapes from the background.  
+   ![Binary](docs/binary_output.png)
+
+3. **Morphological Transformations**  
+   Morphological operations (e.g., erosion and dilation) are used to clean up the binary image, removing small
+   artifacts, and filling gaps.  
+   ![Morphed](docs/morphed_output.png)
+
+4. **Contour Detection and Sorting**  
+   The contours are extracted, sorted by area, and the largest ones are selected and converted into shape objects.  
+   ![Detected Shapes](docs/figures_output.png)
+
+5. **BOF Extraction**  
+   From each identified figure, a Bag-of-Features (BOF) vector is extracted, which represents the distance from the
+   centroid to the contour at uniformly sampled angles.  
+   ![BOFs](docs/bofs_output.png)
+
+6. **Shape Matching**  
+   The test image is then processed using the same pipeline: grayscale conversion, thresholding, morphology, contour
+   detection, and BOF extraction. The resulting BOF vector is compared to the stored ones to find the closest match
+   based on Euclidean distance.
+
+   ```commandline
+   Figure: circle           | Distance: 3.99832
+   Figure: ellipse          | Distance: 2.91195
+   Figure: oval             | Distance: 2.46349
+   Figure: square           | Distance: 2.77508
+   Figure: rectangle        | Distance: 3.12007
+   Figure: trapezium        | Distance: 2.80772
+   Figure: rhombus          | Distance: 2.57886
+   Figure: kite             | Distance: 3.36759
+   Figure: triangle         | Distance: 0.52650
+   Figure: parallelogram    | Distance: 2.85581
+   Figure: right triangle   | Distance: 2.29107
+   Figure: scalene triangle | Distance: 3.84007
+   Figure: pentagon         | Distance: 3.04455
+   Figure: hexagon          | Distance: 3.37883
+   Figure: heptagon         | Distance: 3.68625
+   Figure: octagon          | Distance: 3.78749
+   Figure: nonagon          | Distance: 3.89747
+   Figure: decagon          | Distance: 3.77291
+   Figure: star             | Distance: 2.81078
+   Figure: heart            | Distance: 3.27744
+   Figure: crescent         | Distance: 3.84788
+   Figure: cross            | Distance: 3.30488
+   Figure: pie              | Distance: 2.39407
+   Figure: arrow            | Distance: 2.85595
+   ```
